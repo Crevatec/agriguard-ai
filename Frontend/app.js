@@ -4,7 +4,7 @@
  * Developed by Olakunle Sunday Olalekan
  */
 
-const API = 'http://127.0.0.1:5001';
+const API = 'https://agriguard-ai-engine.onrender.com';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
