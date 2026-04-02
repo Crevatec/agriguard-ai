@@ -1,0 +1,17 @@
+{
+  "model_type": "RandomForestRegressor",
+  "target": "yield_kg_per_hectare",
+  "features": [
+    "temp",
+    "humidity",
+    "soil_ph",
+    "rainfall",
+    "fertilizer_kg",
+    "sunlight_hrs"
+  ],
+  "mae_kg_per_ha": 213.4,
+  "yield_range": {
+    "min": 500,
+    "max": 12000
+  }
+}

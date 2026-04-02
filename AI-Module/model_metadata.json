@@ -1,0 +1,20 @@
+{
+  "model_type": "RandomForestClassifier",
+  "features": [
+    "temp",
+    "humidity",
+    "soil_ph",
+    "rainfall",
+    "wind_speed",
+    "leaf_wetness"
+  ],
+  "classes": {
+    "0": "Healthy",
+    "1": "Fungal Blight",
+    "2": "Bacterial Wilt",
+    "3": "Viral Mosaic"
+  },
+  "n_estimators": 100,
+  "training_samples": 2000,
+  "accuracy": 0.9875
+}

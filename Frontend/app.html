@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgriGuard AI | Industrial Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700;900&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --green:    #00ff88;
+            --green-dim:#00cc6a;
+            --red:      #ff3b3b;
+            --amber:    #ffb800;
+            --blue:     #00aaff;
+            --bg:       #080c0a;
+            --surface:  #0d1410;
+            --border:   #1a2e20;
+            --text:     #c8d8cc;
+            --mono:     'Share Tech Mono', monospace;
+            --sans:     'Barlow', sans-serif;
+            --cond:     'Barlow Condensed', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Scanline overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,255,136,0.015) 2px,
+                rgba(0,255,136,0.015) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* Grid background */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .z1 { position: relative; z-index: 1; }
+
+        /* NAV */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 0 2rem;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(8,12,10,0.95);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-logo {
+            font-family: var(--cond);
+            font-size: 1.5rem;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+            color: var(--green);
+        }
+        .nav-logo span { color: #fff; }
+
+        .nav-node {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            color: #4a7a5a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .node-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%,100% { opacity: 1; }
+            50%      { opacity: 0.3; }
+        }
+
+        /* STAT CARDS */
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 3px; height: 100%;
+        }
+        .stat-card.red::before   { background: var(--red); box-shadow: 0 0 12px var(--red); }
+        .stat-card.green::before { background: var(--green); box-shadow: 0 0 12px var(--green); }
+        .stat-card.amber::before { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+        .stat-card.blue::before  { background: var(--blue); box-shadow: 0 0 12px var(--blue); }
+
+        .stat-label {
+            font-family: var(--mono);
+            font-size: 0.65rem;
+            color: #4a7a5a;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 0.5rem;
+        }
+        .stat-value {
+            font-family: var(--cond);
+            font-size: 2.2rem;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: -0.01em;
+        }
+        .stat-card.red   .stat-value { color: var(--red); }
+        .stat-card.green .stat-value { color: var(--green); }
+        .stat-card.amber .stat-value { color: var(--amber); }
+        .stat-card.blue  .stat-value { color: var(--blue); }
+
+        /* PANELS */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1.5rem;
+        }
+        .panel-title {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--green);
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* FORM */
+        .field-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .field label {
+            font-family: var(--mono);
+            font-size: 0.6rem;
+            color: #4a7a5a;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .field input, .field select {
+            background: #0a1410;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            color: var(--green);
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 0.75rem;
+            outline: none;
+            transition: border-color 0.2s;
+            width: 100%;
+        }
+        .field input:focus, .field select:focus {
+            border-color: var(--green);
+            box-shadow: 0 0 0 2px rgba(0,255,136,0.08);
+        }
+        .field select option { background: #0d1410; }
+
+        /* BUTTONS */
+        .btn-run {
+            width: 100%;
+            padding: 0.85rem;
+            background: transparent;
+            border: 1px solid var(--green);
+            color: var(--green);
+            font-family: var(--cond);
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 0.75rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-run::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--green);
+            transform: translateX(-100%);
+            transition: transform 0.2s;
+            z-index: 0;
+        }
+        .btn-run:hover::before { transform: translateX(0); }
+        .btn-run:hover { color: #000; }
+        .btn-run span { position: relative; z-index: 1; }
+        .btn-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* RESULT BLOCK */
+        .result-block {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #0a1410;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            line-height: 1.8;
+            min-height: 60px;
+            transition: all 0.3s;
+        }
+        .result-row { display: flex; justify-content: space-between; align-items: center; }
+        .result-key { color: #4a7a5a; }
+        .result-val { color: var(--green); font-weight: bold; }
+        .result-val.red    { color: var(--red); }
+        .result-val.amber  { color: var(--amber); }
+        .result-val.blue   { color: var(--blue); }
+
+        /* LOG ENTRIES */
+        .log-entry {
+            padding: 0.75rem;
+            background: #0a1410;
+            border-left: 3px solid var(--border);
+            border-radius: 0 3px 3px 0;
+            margin-bottom: 0.5rem;
+            animation: slideIn 0.3s ease;
+        }
+        .log-entry.warn  { border-left-color: var(--amber); }
+        .log-entry.error { border-left-color: var(--red); }
+        .log-entry.ok    { border-left-color: var(--green); }
+        .log-entry.info  { border-left-color: var(--blue); }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-8px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        .log-time {
+            font-family: var(--mono);
+            font-size: 0.6rem;
+            color: #4a7a5a;
+            margin-bottom: 2px;
+        }
+        .log-msg {
+            font-size: 0.8rem;
+            color: var(--text);
+        }
+
+        /* LOADING SPINNER */
+        .spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid var(--border);
+            border-top-color: var(--green);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* URGENCY BADGE */
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 2px;
+            font-family: var(--mono);
+            font-size: 0.65rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .badge.critical { background: rgba(255,59,59,0.15); color: var(--red); border: 1px solid var(--red); }
+        .badge.high     { background: rgba(255,184,0,0.15);  color: var(--amber); border: 1px solid var(--amber); }
+        .badge.medium   { background: rgba(0,170,255,0.15);  color: var(--blue); border: 1px solid var(--blue); }
+        .badge.none     { background: rgba(0,255,136,0.1);   color: var(--green); border: 1px solid var(--green); }
+
+        /* CHART */
+        #sensorChart { max-height: 220px; }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* LAYOUT */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.5rem;
+        }
+        .span2 { grid-column: span 2; }
+
+        @media (max-width: 1024px) {
+            .main-grid { grid-template-columns: 1fr 1fr; }
+            .span2 { grid-column: span 2; }
+        }
+        @media (max-width: 640px) {
+            .main-grid { grid-template-columns: 1fr; }
+            .span2 { grid-column: span 1; }
+            .field-group { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="z1">
+    <div class="nav-logo">AGRI<span>GUARD</span> <span style="font-size:0.7rem;color:#4a7a5a;font-family:var(--mono);font-weight:400">AI</span></div>
+    <div class="nav-node">
+        <div class="node-dot"></div>
+        NODE: SOUTHEAST-REGION-01 &nbsp;|&nbsp; ENGINE: ONLINE
+    </div>
+</nav>
+
+<!-- MAIN -->
+<main style="padding:1.5rem 2rem;max-width:1400px;margin:0 auto;" class="z1">
+
+    <!-- STAT CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;" id="stat-grid">
+        <div class="stat-card red">
+            <div class="stat-label">Disease Risk Index</div>
+            <div class="stat-value" id="stat-risk">—</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-label">Predicted Yield</div>
+            <div class="stat-value" id="stat-yield">—</div>
+        </div>
+        <div class="stat-card amber">
+            <div class="stat-label">Fertilizer Rec.</div>
+            <div class="stat-value" id="stat-fert" style="font-size:1.3rem">—</div>
+        </div>
+        <div class="stat-card blue">
+            <div class="stat-label">Last Query</div>
+            <div class="stat-value" id="stat-time" style="font-size:1.1rem;font-family:var(--mono)">—</div>
+        </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="main-grid">
+
+        <!-- CHART -->
+        <div class="panel span2">
+            <div class="panel-title">Environmental Telemetry</div>
+            <canvas id="sensorChart"></canvas>
+        </div>
+
+        <!-- AI LOG -->
+        <div class="panel" style="overflow-y:auto;max-height:340px;">
+            <div class="panel-title">AI Inference Log</div>
+            <div id="ai-logs">
+                <div class="log-entry info">
+                    <div class="log-time">SYSTEM</div>
+                    <div class="log-msg">AgriGuard AI Engine ready. Submit farm data to begin.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DISEASE FORM -->
+        <div class="panel">
+            <div class="panel-title">Disease Prediction</div>
+            <div class="field-group">
+                <div class="field">
+                    <label>Temperature (°C)</label>
+                    <input type="number" id="d-temp" value="28" min="0" max="50">
+                </div>
+                <div class="field">
+                    <label>Humidity (%)</label>
+                    <input type="number" id="d-humidity" value="85" min="0" max="100">
+                </div>
+                <div class="field">
+                    <label>Soil pH</label>
+                    <input type="number" id="d-ph" value="6.2" step="0.1" min="0" max="14">
+                </div>
+                <div class="field">
+                    <label>Rainfall (mm)</label>
+                    <input type="number" id="d-rain" value="120" min="0">
+                </div>
+                <div class="field">
+                    <label>Wind Speed (km/h)</label>
+                    <input type="number" id="d-wind" value="8" min="0">
+                </div>
+                <div class="field">
+                    <label>Leaf Wetness (hrs)</label>
+                    <input type="number" id="d-wet" value="15" min="0" max="24">
+                </div>
+            </div>
+            <button class="btn-run" id="btn-disease" onclick="runDisease()"><span>▶ RUN DISEASE SCAN</span></button>
+            <div class="result-block" id="result-disease">
+                <span style="color:#4a7a5a;font-family:var(--mono);font-size:0.7rem">AWAITING INPUT...</span>
+            </div>
+        </div>
+
+        <!-- YIELD FORM -->
+        <div class="panel">
+            <div class="panel-title">Yield Prediction</div>
+            <div class="field-group">
+                <div class="field">
+                    <label>Temperature (°C)</label>
+                    <input type="number" id="y-temp" value="25" min="0" max="50">
+                </div>
+                <div class="field">
+                    <label>Humidity (%)</label>
+                    <input type="number" id="y-humidity" value="70" min="0" max="100">
+                </div>
+                <div class="field">
+                    <label>Soil pH</label>
+                    <input type="number" id="y-ph" value="6.5" step="0.1">
+                </div>
+                <div class="field">
+                    <label>Rainfall (mm)</label>
+                    <input type="number" id="y-rain" value="150" min="0">
+                </div>
+                <div class="field">
+                    <label>Fertilizer (kg/ha)</label>
+                    <input type="number" id="y-fert" value="120" min="0">
+                </div>
+                <div class="field">
+                    <label>Sunlight (hrs/day)</label>
+                    <input type="number" id="y-sun" value="9" min="0" max="24">
+                </div>
+            </div>
+            <button class="btn-run" id="btn-yield" onclick="runYield()"><span>▶ PREDICT YIELD</span></button>
+            <div class="result-block" id="result-yield">
+                <span style="color:#4a7a5a;font-family:var(--mono);font-size:0.7rem">AWAITING INPUT...</span>
+            </div>
+        </div>
+
+        <!-- FERTILIZER FORM -->
+        <div class="panel">
+            <div class="panel-title">Fertilizer Recommendation</div>
+            <div class="field-group">
+                <div class="field">
+                    <label>Crop Type</label>
+                    <select id="f-crop">
+                        <option value="Maize">Maize</option>
+                        <option value="Rice">Rice</option>
+                        <option value="Cassava">Cassava</option>
+                        <option value="Tomato">Tomato</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Soil pH</label>
+                    <input type="number" id="f-ph" value="5.2" step="0.1">
+                </div>
+                <div class="field">
+                    <label>Nitrogen (kg/ha)</label>
+                    <input type="number" id="f-n" value="20" min="0">
+                </div>
+                <div class="field">
+                    <label>Phosphorus (kg/ha)</label>
+                    <input type="number" id="f-p" value="30" min="0">
+                </div>
+                <div class="field">
+                    <label>Potassium (kg/ha)</label>
+                    <input type="number" id="f-k" value="50" min="0">
+                </div>
+                <div class="field">
+                    <label>Soil Moisture (%)</label>
+                    <input type="number" id="f-moisture" value="40" min="0" max="100">
+                </div>
+            </div>
+            <button class="btn-run" id="btn-fert" onclick="runFertilizer()"><span>▶ GET RECOMMENDATION</span></button>
+            <div class="result-block" id="result-fert">
+                <span style="color:#4a7a5a;font-family:var(--mono);font-size:0.7rem">AWAITING INPUT...</span>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script>
+/*
+ * AgriGuard AI — Frontend Logic
+ * Powered by Clevatec
+ * Developed by Olakunle Sunday Olalekan
+ */
+
+const API = 'http://127.0.0.1:5001';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function now() {
+    return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function addLog(msg, type = 'info') {
+    const logs = document.getElementById('ai-logs');
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.innerHTML = `<div class="log-time">${now()}</div><div class="log-msg">${msg}</div>`;
+    logs.prepend(entry);
+    // Keep max 20 entries
+    while (logs.children.length > 20) logs.removeChild(logs.lastChild);
+}
+
+function setLoading(btnId, resultId, loading) {
+    const btn = document.getElementById(btnId);
+    const res = document.getElementById(resultId);
+    if (loading) {
+        btn.disabled = true;
+        res.innerHTML = `<span class="spinner"></span><span style="color:#4a7a5a;font-family:var(--mono);font-size:0.7rem">PROCESSING...</span>`;
+    } else {
+        btn.disabled = false;
+    }
+}
+
+function urgencyClass(urgency) {
+    const map = { 'Critical': 'critical', 'High': 'high', 'Medium': 'medium', 'None': 'none', 'Normal': 'none' };
+    return map[urgency] || 'none';
+}
+
+function ratingColor(rating) {
+    const map = { 'Excellent': 'green', 'Good': '', 'Fair': 'amber', 'Poor': 'red' };
+    return map[rating] || '';
+}
+
+// ── Disease Prediction ───────────────────────────────────────────────────────
+
+async function runDisease() {
+    setLoading('btn-disease', 'result-disease', true);
+    addLog('Initiating disease scan...', 'info');
+
+    const body = {
+        temp:         parseFloat(document.getElementById('d-temp').value),
+        humidity:     parseFloat(document.getElementById('d-humidity').value),
+        soil_ph:      parseFloat(document.getElementById('d-ph').value),
+        rainfall:     parseFloat(document.getElementById('d-rain').value),
+        wind_speed:   parseFloat(document.getElementById('d-wind').value),
+        leaf_wetness: parseFloat(document.getElementById('d-wet').value)
+    };
+
+    try {
+        const res  = await fetch(`${API}/predict_disease`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        const uClass  = urgencyClass(data.urgency);
+        const pct     = Math.round(data.confidence * 100);
+        const isDisease = data.disease !== 'Healthy';
+
+        document.getElementById('result-disease').innerHTML = `
+            <div class="result-row" style="margin-bottom:6px">
+                <span class="result-key">PATHOGEN</span>
+                <span class="result-val ${isDisease ? 'red' : ''}">${data.disease}</span>
+            </div>
+            <div class="result-row" style="margin-bottom:6px">
+                <span class="result-key">CONFIDENCE</span>
+                <span class="result-val">${pct}%</span>
+            </div>
+            <div class="result-row">
+                <span class="result-key">URGENCY</span>
+                <span class="badge ${uClass}">${data.urgency}</span>
+            </div>
+        `;
+
+        // Update stat card
+        document.getElementById('stat-risk').textContent = `${pct}%`;
+
+        const logType = data.urgency === 'Critical' ? 'error' : data.urgency === 'High' ? 'warn' : 'ok';
+        addLog(`Disease scan complete: <strong>${data.disease}</strong> — ${pct}% confidence`, logType);
+        updateStatTime();
+
+    } catch (err) {
+        document.getElementById('result-disease').innerHTML =
+            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">❌ ENGINE OFFLINE — Is Flask running on port 5001?</span>`;
+        addLog('Connection failed. Check that model_engine.py is running.', 'error');
+    }
+    setLoading('btn-disease', 'result-disease', false);
+}
+
+// ── Yield Prediction ─────────────────────────────────────────────────────────
+
+async function runYield() {
+    setLoading('btn-yield', 'result-yield', true);
+    addLog('Computing yield forecast...', 'info');
+
+    const body = {
+        temp:           parseFloat(document.getElementById('y-temp').value),
+        humidity:       parseFloat(document.getElementById('y-humidity').value),
+        soil_ph:        parseFloat(document.getElementById('y-ph').value),
+        rainfall:       parseFloat(document.getElementById('y-rain').value),
+        fertilizer_kg:  parseFloat(document.getElementById('y-fert').value),
+        sunlight_hrs:   parseFloat(document.getElementById('y-sun').value)
+    };
+
+    try {
+        const res  = await fetch(`${API}/predict_yield`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        const rColor = ratingColor(data.rating);
+        const tons   = (data.yield_kg_per_hectare / 1000).toFixed(2);
+
+        document.getElementById('result-yield').innerHTML = `
+            <div class="result-row" style="margin-bottom:6px">
+                <span class="result-key">YIELD</span>
+                <span class="result-val">${data.yield_kg_per_hectare.toLocaleString()} kg/ha</span>
+            </div>
+            <div class="result-row" style="margin-bottom:6px">
+                <span class="result-key">RATING</span>
+                <span class="result-val ${rColor}">${data.rating}</span>
+            </div>
+            <div class="result-row">
+                <span class="result-key">ADVICE</span>
+                <span style="color:#8aaa9a;font-size:0.7rem;text-align:right;max-width:60%">${data.advice}</span>
+            </div>
+        `;
+
+        document.getElementById('stat-yield').textContent = `${tons}T`;
+        addLog(`Yield forecast: <strong>${data.yield_kg_per_hectare.toLocaleString()} kg/ha</strong> — ${data.rating}`, 'ok');
+        updateStatTime();
+
+    } catch (err) {
+        document.getElementById('result-yield').innerHTML =
+            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">❌ ENGINE OFFLINE — Is Flask running on port 5001?</span>`;
+        addLog('Connection failed. Check that model_engine.py is running.', 'error');
+    }
+    setLoading('btn-yield', 'result-yield', false);
+}
+
+// ── Fertilizer Recommendation ────────────────────────────────────────────────
+
+async function runFertilizer() {
+    setLoading('btn-fert', 'result-fert', true);
+    addLog('Analysing soil nutrient profile...', 'info');
+
+    const body = {
+        crop_type:  document.getElementById('f-crop').value,
+        soil_ph:    parseFloat(document.getElementById('f-ph').value),
+        nitrogen:   parseFloat(document.getElementById('f-n').value),
+        phosphorus: parseFloat(document.getElementById('f-p').value),
+        potassium:  parseFloat(document.getElementById('f-k').value),
+        moisture:   parseFloat(document.getElementById('f-moisture').value)
+    };
+
+    try {
+        const res  = await fetch(`${API}/recommend_fertilizer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        const pct = Math.round(data.confidence * 100);
+
+        document.getElementById('result-fert').innerHTML = `
+            <div class="result-row" style="margin-bottom:6px">
+                <span class="result-key">FERTILIZER</span>
+                <span class="result-val blue">${data.recommended_fertilizer}</span>
+            </div>
+            <div class="result-row" style="margin-bottom:8px">
+                <span class="result-key">CONFIDENCE</span>
+                <span class="result-val">${pct}%</span>
+            </div>
+            <div style="color:#8aaa9a;font-size:0.68rem;line-height:1.6;border-top:1px solid var(--border);padding-top:8px">
+                ${data.dosage_guide}
+            </div>
+        `;
+
+        document.getElementById('stat-fert').textContent = data.recommended_fertilizer;
+        addLog(`Fertilizer for <strong>${data.crop}</strong>: <strong>${data.recommended_fertilizer}</strong> (${pct}% confidence)`, 'ok');
+        updateStatTime();
+
+    } catch (err) {
+        document.getElementById('result-fert').innerHTML =
+            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">❌ ENGINE OFFLINE — Is Flask running on port 5001?</span>`;
+        addLog('Connection failed. Check that model_engine.py is running.', 'error');
+    }
+    setLoading('btn-fert', 'result-fert', false);
+}
+
+// ── Stat Clock ───────────────────────────────────────────────────────────────
+
+function updateStatTime() {
+    document.getElementById('stat-time').textContent = now();
+}
+
+// ── Sensor Chart ─────────────────────────────────────────────────────────────
+
+function initSensorChart() {
+    const ctx = document.getElementById('sensorChart').getContext('2d');
+    const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Temperature (°C)',
+                    data: [22, 24, 27, 29, 31, 33, 32, 30, 28, 26, 24, 22],
+                    borderColor: '#ff3b3b',
+                    backgroundColor: 'rgba(255,59,59,0.05)',
+                    tension: 0.4, pointRadius: 3,
+                    pointBackgroundColor: '#ff3b3b'
+                },
+                {
+                    label: 'Humidity (%)',
+                    data: [58, 62, 68, 72, 75, 80, 78, 74, 70, 65, 60, 56],
+                    borderColor: '#00aaff',
+                    backgroundColor: 'rgba(0,170,255,0.05)',
+                    tension: 0.4, pointRadius: 3,
+                    pointBackgroundColor: '#00aaff'
+                },
+                {
+                    label: 'Rainfall (mm)',
+                    data: [40, 55, 80, 110, 140, 200, 180, 160, 120, 90, 60, 45],
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0,255,136,0.05)',
+                    tension: 0.4, pointRadius: 3,
+                    pointBackgroundColor: '#00ff88'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#4a7a5a',
+                        font: { family: "'Share Tech Mono', monospace", size: 10 },
+                        boxWidth: 12
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: '#1a2e20' },
+                    ticks: { color: '#4a7a5a', font: { family: "'Share Tech Mono', monospace", size: 10 } }
+                },
+                x: {
+                    grid: { color: '#1a2e20' },
+                    ticks: { color: '#4a7a5a', font: { family: "'Share Tech Mono', monospace", size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+    initSensorChart();
+    addLog('Engine handshake complete. All 3 AI modules loaded.', 'ok');
+});
+</script>
+</body>
+</html>

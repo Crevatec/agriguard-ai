@@ -1,0 +1,25 @@
+{
+  "model_type": "RandomForestClassifier",
+  "features": [
+    "soil_ph",
+    "nitrogen",
+    "phosphorus",
+    "potassium",
+    "crop_type",
+    "moisture"
+  ],
+  "crop_types": {
+    "0": "Maize",
+    "1": "Rice",
+    "2": "Cassava",
+    "3": "Tomato"
+  },
+  "classes": {
+    "0": "NPK",
+    "1": "Urea",
+    "2": "DAP",
+    "3": "Potash",
+    "4": "Organic/Lime"
+  },
+  "accuracy": 1.0
+}

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: agriguard-ai-engine
+    runtime: python
+    buildCommand: pip install -r ai-module/requirements.txt
+    startCommand: gunicorn --chdir ai-module model_engine:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
