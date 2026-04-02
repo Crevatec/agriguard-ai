@@ -16,6 +16,7 @@ function now() {
 
 function addLog(msg, type = 'info') {
     const logs = document.getElementById('ai-logs');
+    if (!logs) return;
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
     entry.innerHTML = `<div class="log-time">${now()}</div><div class="log-msg">${msg}</div>`;
@@ -26,6 +27,8 @@ function addLog(msg, type = 'info') {
 function setLoading(btnId, resultId, loading) {
     const btn = document.getElementById(btnId);
     const res = document.getElementById(resultId);
+    if (!btn || !res) return;
+
     if (loading) {
         btn.disabled = true;
         res.innerHTML = `<span class="spinner"></span><span style="color:#4a7a5a;font-family:var(--mono);font-size:0.7rem">PROCESSING...</span>`;
@@ -45,22 +48,23 @@ function ratingColor(rating) {
 }
 
 function updateStatTime() {
-    document.getElementById('stat-time').textContent = now();
+    const statTime = document.getElementById('stat-time');
+    if (statTime) statTime.textContent = now();
 }
 
 // ── Disease Prediction ────────────────────────────────────────────────────────
 
 async function runDisease() {
     setLoading('btn-disease', 'result-disease', true);
-    addLog('Initiating disease scan...', 'info');
+    addLog('Initiating cloud disease scan...', 'info');
 
     const body = {
-        temp:         parseFloat(document.getElementById('d-temp').value),
-        humidity:     parseFloat(document.getElementById('d-humidity').value),
-        soil_ph:      parseFloat(document.getElementById('d-ph').value),
-        rainfall:     parseFloat(document.getElementById('d-rain').value),
-        wind_speed:   parseFloat(document.getElementById('d-wind').value),
-        leaf_wetness: parseFloat(document.getElementById('d-wet').value)
+        temp:         parseFloat(document.getElementById('d-temp').value) || 0,
+        humidity:     parseFloat(document.getElementById('d-humidity').value) || 0,
+        soil_ph:      parseFloat(document.getElementById('d-ph').value) || 0,
+        rainfall:     parseFloat(document.getElementById('d-rain').value) || 0,
+        wind_speed:   parseFloat(document.getElementById('d-wind').value) || 0,
+        leaf_wetness: parseFloat(document.getElementById('d-wet').value) || 0
     };
 
     try {
@@ -72,13 +76,13 @@ async function runDisease() {
         const data = await res.json();
 
         const uClass    = urgencyClass(data.urgency);
-        const pct       = Math.round(data.confidence * 100);
+        const pct       = Math.round((data.confidence || 0) * 100);
         const isDisease = data.disease !== 'Healthy';
 
         document.getElementById('result-disease').innerHTML = `
             <div class="result-row" style="margin-bottom:6px">
                 <span class="result-key">PATHOGEN</span>
-                <span class="result-val ${isDisease ? 'red' : ''}">${data.disease}</span>
+                <span class="result-val ${isDisease ? 'red' : ''}">${data.disease || 'Unknown'}</span>
             </div>
             <div class="result-row" style="margin-bottom:6px">
                 <span class="result-key">CONFIDENCE</span>
@@ -86,25 +90,22 @@ async function runDisease() {
             </div>
             <div class="result-row">
                 <span class="result-key">URGENCY</span>
-                <span class="badge ${uClass}">${data.urgency}</span>
+                <span class="badge ${uClass}">${data.urgency || 'Normal'}</span>
             </div>
         `;
 
-        document.getElementById('stat-risk').textContent = `${pct}%`;
+        const statRisk = document.getElementById('stat-risk');
+        if (statRisk) statRisk.textContent = `${pct}%`;
 
-        const logType = data.urgency === 'Critical' ? 'error'
-                      : data.urgency === 'High'     ? 'warn' : 'ok';
+        const logType = data.urgency === 'Critical' ? 'error' : (data.urgency === 'High' ? 'warn' : 'ok');
         addLog(`Disease scan: <strong>${data.disease}</strong> — ${pct}% confidence`, logType);
         updateStatTime();
 
     } catch (err) {
-        document.getElementById('result-disease').innerHTML =
-            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">
-                ❌ ENGINE OFFLINE — Is Flask running on port 5001?
-            </span>`;
-        addLog('Connection failed. Check that model_engine.py is running.', 'error');
+        document.getElementById('result-disease').innerHTML = 
+            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">❌ CLOUD ENGINE OFFLINE — Check Render status.</span>`;
+        addLog('Cloud connection failed. Check your internet or Render dashboard.', 'error');
     }
-
     setLoading('btn-disease', 'result-disease', false);
 }
 
@@ -112,15 +113,15 @@ async function runDisease() {
 
 async function runYield() {
     setLoading('btn-yield', 'result-yield', true);
-    addLog('Computing yield forecast...', 'info');
+    addLog('Computing cloud yield forecast...', 'info');
 
     const body = {
-        temp:          parseFloat(document.getElementById('y-temp').value),
-        humidity:      parseFloat(document.getElementById('y-humidity').value),
-        soil_ph:       parseFloat(document.getElementById('y-ph').value),
-        rainfall:      parseFloat(document.getElementById('y-rain').value),
-        fertilizer_kg: parseFloat(document.getElementById('y-fert').value),
-        sunlight_hrs:  parseFloat(document.getElementById('y-sun').value)
+        temp:          parseFloat(document.getElementById('y-temp').value) || 0,
+        humidity:      parseFloat(document.getElementById('y-humidity').value) || 0,
+        soil_ph:       parseFloat(document.getElementById('y-ph').value) || 0,
+        rainfall:      parseFloat(document.getElementById('y-rain').value) || 0,
+        fertilizer_kg: parseFloat(document.getElementById('y-fert').value) || 0,
+        sunlight_hrs:  parseFloat(document.getElementById('y-sun').value) || 0
     };
 
     try {
@@ -132,37 +133,36 @@ async function runYield() {
         const data = await res.json();
 
         const rColor = ratingColor(data.rating);
-        const tons   = (data.yield_kg_per_hectare / 1000).toFixed(2);
+        const yieldVal = data.yield_kg_per_hectare || 0;
+        const tons   = (yieldVal / 1000).toFixed(2);
 
         document.getElementById('result-yield').innerHTML = `
             <div class="result-row" style="margin-bottom:6px">
                 <span class="result-key">YIELD</span>
-                <span class="result-val">${data.yield_kg_per_hectare.toLocaleString()} kg/ha</span>
+                <span class="result-val">${yieldVal.toLocaleString()} kg/ha</span>
             </div>
             <div class="result-row" style="margin-bottom:6px">
                 <span class="result-key">RATING</span>
-                <span class="result-val ${rColor}">${data.rating}</span>
+                <span class="result-val ${rColor}">${data.rating || 'N/A'}</span>
             </div>
             <div class="result-row">
                 <span class="result-key">ADVICE</span>
                 <span style="color:#8aaa9a;font-size:0.7rem;text-align:right;max-width:60%">
-                    ${data.advice}
+                    ${data.advice || 'No specific advice available.'}
                 </span>
             </div>
         `;
 
-        document.getElementById('stat-yield').textContent = `${tons}T`;
-        addLog(`Yield forecast: <strong>${data.yield_kg_per_hectare.toLocaleString()} kg/ha</strong> — ${data.rating}`, 'ok');
+        const statYield = document.getElementById('stat-yield');
+        if (statYield) statYield.textContent = `${tons}T`;
+        addLog(`Yield forecast: <strong>${yieldVal.toLocaleString()} kg/ha</strong> — ${data.rating}`, 'ok');
         updateStatTime();
 
     } catch (err) {
-        document.getElementById('result-yield').innerHTML =
-            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">
-                ❌ ENGINE OFFLINE — Is Flask running on port 5001?
-            </span>`;
-        addLog('Connection failed. Check that model_engine.py is running.', 'error');
+        document.getElementById('result-yield').innerHTML = 
+            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">❌ CLOUD ENGINE OFFLINE</span>`;
+        addLog('Yield computation failed. Check Render logs.', 'error');
     }
-
     setLoading('btn-yield', 'result-yield', false);
 }
 
@@ -170,15 +170,15 @@ async function runYield() {
 
 async function runFertilizer() {
     setLoading('btn-fert', 'result-fert', true);
-    addLog('Analysing soil nutrient profile...', 'info');
+    addLog('Analysing cloud nutrient profile...', 'info');
 
     const body = {
         crop_type:  document.getElementById('f-crop').value,
-        soil_ph:    parseFloat(document.getElementById('f-ph').value),
-        nitrogen:   parseFloat(document.getElementById('f-n').value),
-        phosphorus: parseFloat(document.getElementById('f-p').value),
-        potassium:  parseFloat(document.getElementById('f-k').value),
-        moisture:   parseFloat(document.getElementById('f-moisture').value)
+        soil_ph:    parseFloat(document.getElementById('f-ph').value) || 0,
+        nitrogen:   parseFloat(document.getElementById('f-n').value) || 0,
+        phosphorus: parseFloat(document.getElementById('f-p').value) || 0,
+        potassium:  parseFloat(document.getElementById('f-k').value) || 0,
+        moisture:   parseFloat(document.getElementById('f-moisture').value) || 0
     };
 
     try {
@@ -188,39 +188,34 @@ async function runFertilizer() {
             body: JSON.stringify(body)
         });
         const data = await res.json();
-
-        const pct = Math.round(data.confidence * 100);
+        const pct = Math.round((data.confidence || 0) * 100);
 
         document.getElementById('result-fert').innerHTML = `
             <div class="result-row" style="margin-bottom:6px">
                 <span class="result-key">FERTILIZER</span>
-                <span class="result-val blue">${data.recommended_fertilizer}</span>
+                <span class="result-val blue">${data.recommended_fertilizer || 'Unknown'}</span>
             </div>
             <div class="result-row" style="margin-bottom:8px">
                 <span class="result-key">CONFIDENCE</span>
                 <span class="result-val">${pct}%</span>
             </div>
-            <div style="color:#8aaa9a;font-size:0.68rem;line-height:1.6;
-                        border-top:1px solid var(--border);padding-top:8px">
-                ${data.dosage_guide}
+            <div style="color:#8aaa9a;font-size:0.68rem;line-height:1.6; border-top:1px solid var(--border);padding-top:8px">
+                ${data.dosage_guide || 'Follow general N-P-K guidelines.'}
             </div>
         `;
 
-        document.getElementById('stat-fert').textContent = data.recommended_fertilizer;
-        addLog(`Fertilizer for <strong>${data.crop}</strong>: <strong>${data.recommended_fertilizer}</strong> (${pct}%)`, 'ok');
+        const statFert = document.getElementById('stat-fert');
+        if (statFert) statFert.textContent = data.recommended_fertilizer;
+        addLog(`AI Recommendation: <strong>${data.recommended_fertilizer}</strong> (${pct}%)`, 'ok');
         updateStatTime();
 
     } catch (err) {
-        document.getElementById('result-fert').innerHTML =
-            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">
-                ❌ ENGINE OFFLINE — Is Flask running on port 5001?
-            </span>`;
-        addLog('Connection failed. Check that model_engine.py is running.', 'error');
+        document.getElementById('result-fert').innerHTML = 
+            `<span style="color:var(--red);font-family:var(--mono);font-size:0.7rem">❌ CLOUD ENGINE OFFLINE</span>`;
+        addLog('Fertilizer analysis failed. API unreachable.', 'error');
     }
-
     setLoading('btn-fert', 'result-fert', false);
 }
-
 // ── Sensor Chart ──────────────────────────────────────────────────────────────
 
 function initSensorChart() {
