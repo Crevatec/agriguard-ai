@@ -4,7 +4,7 @@
  * Developed by Olakunle Sunday Olalekan
  */
 
-const API = 'https://agriguard-ai-engine.onrender.com';
+const API = 'https://agriguard-ai-a7vf.onrender.com';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
