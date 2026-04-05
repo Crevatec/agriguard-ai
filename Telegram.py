@@ -6,6 +6,7 @@ Developed by Olakunle Sunday Olalekan
 
 import logging
 import os
+import asyncio
 import requests
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
@@ -39,10 +40,10 @@ CROP_CATEGORIES = {
 }
 
 CROP_TO_MODEL = {
-    "Maize": "Maize",   "Rice": "Rice",       "Sorghum": "Maize",  "Millet": "Maize",
-    "Cassava": "Cassava","Yam": "Cassava",     "Sweet Potato": "Cassava", "Cocoyam": "Cassava",
-    "Tomato": "Tomato", "Pepper": "Tomato",   "Onion": "Tomato",   "Cabbage": "Tomato",
-    "Cowpea": "Maize",  "Soybean": "Maize",   "Groundnut": "Maize","Beans": "Maize",
+    "Maize": "Maize",    "Rice": "Rice",          "Sorghum": "Maize",    "Millet": "Maize",
+    "Cassava": "Cassava","Yam": "Cassava",         "Sweet Potato": "Cassava", "Cocoyam": "Cassava",
+    "Tomato": "Tomato",  "Pepper": "Tomato",       "Onion": "Tomato",     "Cabbage": "Tomato",
+    "Cowpea": "Maize",   "Soybean": "Maize",       "Groundnut": "Maize",  "Beans": "Maize",
 }
 
 # ── Conversion Maps ───────────────────────────────────────────────────────────
@@ -121,6 +122,18 @@ def crop_keyboard(category):
 
 def all_crops():
     return [c for crops in CROP_CATEGORIES.values() for c in crops]
+
+# ── Keep Alive ────────────────────────────────────────────────────────────────
+
+async def keep_alive():
+    """Ping the Flask API every 10 minutes to prevent it sleeping."""
+    while True:
+        try:
+            requests.get(AI_API, timeout=10)
+            print("✅ Keep-alive ping sent to AI engine")
+        except Exception:
+            print("⚠️ Keep-alive ping failed — retrying next cycle")
+        await asyncio.sleep(600)
 
 # ── Start ─────────────────────────────────────────────────────────────────────
 
@@ -258,7 +271,7 @@ async def d_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     crop = context.user_data['crop']
     try:
-        res  = requests.post(f"{AI_API}/predict_disease", json={
+        res = requests.post(f"{AI_API}/predict_disease", json={
             "temp": context.user_data['temp'], "humidity": context.user_data['humidity'],
             "rainfall": context.user_data['rainfall'], "leaf_wetness": LEAVES_MAP[lv],
             "soil_ph": 6.5, "wind_speed": 10
@@ -347,7 +360,7 @@ async def y_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     crop = context.user_data['crop']
     try:
-        res  = requests.post(f"{AI_API}/predict_yield", json={
+        res = requests.post(f"{AI_API}/predict_yield", json={
             "temp": context.user_data['temp'], "humidity": 70, "soil_ph": 6.5,
             "rainfall": context.user_data['rainfall'], "fertilizer_kg": FERT_USAGE_MAP[fu],
             "sunlight_hrs": 8
@@ -360,7 +373,7 @@ async def y_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tons      = round(yield_kg / 1000, 2)
         bags_50kg = int(yield_kg / 50)
 
-        emoji = {"Excellent":"🌟","Good":"✅","Fair":"⚡","Poor":"⚠️"}.get(rating, "📊")
+        emoji = {"Excellent": "🌟", "Good": "✅", "Fair": "⚡", "Poor": "⚠️"}.get(rating, "📊")
 
         await update.message.reply_text(
             f"🌾 *AgriGuard Harvest Forecast*\n{'─'*30}\n"
@@ -422,7 +435,7 @@ async def f_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     crop       = context.user_data['crop']
     model_crop = CROP_TO_MODEL.get(crop, "Maize")
     try:
-        res  = requests.post(f"{AI_API}/recommend_fertilizer", json={
+        res = requests.post(f"{AI_API}/recommend_fertilizer", json={
             "crop_type": model_crop, "soil_ph": context.user_data['soil_ph'],
             "nitrogen": LAST_FERT_MAP[lf], "phosphorus": 30,
             "potassium": 50, "moisture": 40
@@ -481,8 +494,14 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(conv)
+
+    # Start keep-alive ping loop
+    loop = asyncio.get_event_loop()
+    loop.create_task(keep_alive())
+
     print("🌿 AgriGuard AI Bot v2 is running...")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
