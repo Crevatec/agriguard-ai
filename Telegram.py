@@ -6,7 +6,6 @@ Developed by Olakunle Sunday Olalekan
 
 import logging
 import os
-import asyncio
 import requests
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
@@ -123,17 +122,15 @@ def crop_keyboard(category):
 def all_crops():
     return [c for crops in CROP_CATEGORIES.values() for c in crops]
 
-# ── Keep Alive ────────────────────────────────────────────────────────────────
+# ── Keep Alive (uses job_queue — compatible with Python 3.14) ─────────────────
 
-async def keep_alive():
-    """Ping the Flask API every 10 minutes to prevent it sleeping."""
-    while True:
-        try:
-            requests.get(AI_API, timeout=10)
-            print("✅ Keep-alive ping sent to AI engine")
-        except Exception:
-            print("⚠️ Keep-alive ping failed — retrying next cycle")
-        await asyncio.sleep(600)
+async def ping_ai(context: ContextTypes.DEFAULT_TYPE):
+    """Ping the Flask API every 10 minutes to prevent Render sleeping."""
+    try:
+        requests.get(AI_API, timeout=10)
+        print("✅ Keep-alive ping sent to AI engine")
+    except Exception:
+        print("⚠️ Keep-alive ping failed — will retry next cycle")
 
 # ── Start ─────────────────────────────────────────────────────────────────────
 
@@ -226,7 +223,7 @@ async def d_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def d_crop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     crop = update.message.text.strip()
     if crop not in all_crops():
-        await update.message.reply_text("Please select your crop 👇", reply_markup=crop_keyboard(context.user_data.get('cat','')))
+        await update.message.reply_text("Please select your crop 👇", reply_markup=crop_keyboard(context.user_data.get('cat', '')))
         return D_CROP
     context.user_data['crop'] = crop
     await update.message.reply_text(
@@ -324,7 +321,7 @@ async def y_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def y_crop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     crop = update.message.text.strip()
     if crop not in all_crops():
-        await update.message.reply_text("Please select your crop 👇", reply_markup=crop_keyboard(context.user_data.get('cat','')))
+        await update.message.reply_text("Please select your crop 👇", reply_markup=crop_keyboard(context.user_data.get('cat', '')))
         return Y_CROP
     context.user_data['crop'] = crop
     await update.message.reply_text(
@@ -407,7 +404,7 @@ async def f_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def f_crop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     crop = update.message.text.strip()
     if crop not in all_crops():
-        await update.message.reply_text("Please select your crop 👇", reply_markup=crop_keyboard(context.user_data.get('cat','')))
+        await update.message.reply_text("Please select your crop 👇", reply_markup=crop_keyboard(context.user_data.get('cat', '')))
         return F_CROP
     context.user_data['crop'] = crop
     await update.message.reply_text(
@@ -471,6 +468,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -493,11 +491,11 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
+
     app.add_handler(conv)
 
-    # Start keep-alive ping loop
-    loop = asyncio.get_event_loop()
-    loop.create_task(keep_alive())
+    # Keep-alive: ping Flask API every 10 minutes using job_queue
+    app.job_queue.run_repeating(ping_ai, interval=600, first=10)
 
     print("🌿 AgriGuard AI Bot v2 is running...")
     app.run_polling()
